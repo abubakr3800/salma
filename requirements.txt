@@ -5,3 +5,4 @@ scikit-learn==1.2.2
 librosa==0.10.1
 soundfile==0.12.1
 joblib==1.5.1
+gunicorn==20.1.0
