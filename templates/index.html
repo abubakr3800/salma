@@ -1,114 +1,117 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-    <meta charset="UTF-8" />
-    <title>تسجيل الصوت باستخدام Recorder.js</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            text-align: center;
-            padding: 40px;
-        }
-        button {
-            padding: 12px 20px;
-            margin: 10px;
-            border: none;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        #startBtn { background: #4CAF50; }
-        #stopBtn { background: #f44336; }
-        #result {
-            font-size: 18px;
-            margin-top: 20px;
-        }
-        audio {
-            margin-top: 15px;
-            width: 300px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>تسجيل الصوت باستخدام MediaRecorder</title>
+  <style>
+    /* نفس تنسيقك السابق */
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      text-align: center;
+      padding: 40px;
+    }
+    button {
+      padding: 12px 20px;
+      margin: 10px;
+      border: none;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #startBtn { background: #4CAF50; }
+    #stopBtn { background: #f44336; }
+    #result {
+      font-size: 18px;
+      margin-top: 20px;
+    }
+    audio {
+      margin-top: 15px;
+      width: 300px;
+    }
+  </style>
 </head>
 <body>
-    <h1>🎤 تسجيل الصوت باستخدام Recorder.js</h1>
+  <h1>🎤 تسجيل الصوت باستخدام MediaRecorder API</h1>
 
-    <button id="startBtn">ابدأ التسجيل</button>
-    <button id="stopBtn" disabled>أوقف التسجيل</button>
+  <button id="startBtn">ابدأ التسجيل</button>
+  <button id="stopBtn" disabled>أوقف التسجيل</button>
 
-    <div>
-        <audio id="audioPlayback" controls></audio>
-    </div>
+  <div>
+    <audio id="audioPlayback" controls></audio>
+  </div>
 
-    <div id="result"></div>
+  <div id="result"></div>
 
-    <script src="https://cdn.jsdelivr.net/gh/mattdiamond/Recorderjs@master/dist/recorder.js"></script>
-    <script>
-        let recorder;
-        let audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        let resultDiv = document.getElementById("result");
-        let audioPlayback = document.getElementById("audioPlayback");
-        const startBtn = document.getElementById("startBtn");
-        const stopBtn = document.getElementById("stopBtn");
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
 
-        startBtn.onclick = async () => {
-            resultDiv.innerText = "";
-            audioPlayback.src = "";
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const audioPlayback = document.getElementById('audioPlayback');
+    const resultDiv = document.getElementById('result');
 
-            if (!recorder) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    recorder = new Recorder(audioContext, {
-                        source: audioContext.createMediaStreamSource(stream)
-                    });
-                } catch (err) {
-                    alert("لم نتمكن من الحصول على إذن الميكروفون: " + err);
-                    return;
-                }
-            }
+    startBtn.addEventListener('click', async () => {
+      resultDiv.textContent = '';
+      audioChunks = [];
+      audioPlayback.src = '';
 
-            await audioContext.resume();
-            recorder.start();
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = e => {
+          if (e.data.size > 0) {
+            audioChunks.push(e.data);
+          }
         };
 
-        stopBtn.onclick = async () => {
-            const { blob } = await recorder.stop();
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(audioChunks, { type: 'audio/wav' });
+          const audioUrl = URL.createObjectURL(blob);
+          audioPlayback.src = audioUrl;
 
-            // تعيين مصدر الصوت للتشغيل
-            const audioUrl = URL.createObjectURL(blob);
-            audioPlayback.src = audioUrl;
+          // أرسل الملف إلى الباك إند
+          const formData = new FormData();
+          formData.append('file', blob, 'recording.wav');
 
-            // إعداد البيانات لإرسالها
-            const formData = new FormData();
-            formData.append("file", blob, "recording.wav");
+          try {
+            const res = await fetch('https://salma-production.up.railway.app/predict', {
+              method: 'POST',
+              body: formData
+            });
+            const data = await res.json();
 
-            try {
-                const res = await fetch("https://salma-production.up.railway.app/predict", {
-                    method: "POST",
-                    body: formData
-                });
-
-                const data = await res.json();
-
-                if (data.error) {
-                    resultDiv.innerText = `خطأ: ${data.error}`;
-                    return;
-                }
-
-                const label = data.result?.label ?? "غير معروف";
-                const confidence = data.result?.confidence !== undefined
-                    ? (data.result.confidence * 100).toFixed(2) + "%"
-                    : "N/A";
-
-                resultDiv.innerText = `التصنيف: ${label}, الثقة: ${confidence}`;
-            } catch (err) {
-                resultDiv.innerText = `خطأ: ${err.message}`;
+            if(data.error){
+              resultDiv.textContent = `خطأ: ${data.error}`;
+              return;
             }
+
+            const label = data.result?.label ?? "غير معروف";
+            const confidence = data.result?.confidence !== undefined
+              ? (data.result.confidence * 100).toFixed(2) + "%"
+              : "N/A";
+
+            resultDiv.textContent = `التصنيف: ${label}, الثقة: ${confidence}`;
+          } catch (err) {
+            resultDiv.textContent = `خطأ: ${err.message}`;
+          }
         };
-    </script>
+
+        mediaRecorder.start();
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+      } catch (err) {
+        alert('لم نتمكن من الحصول على إذن الميكروفون: ' + err.message);
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      mediaRecorder.stop();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    });
+  </script>
 </body>
 </html>
