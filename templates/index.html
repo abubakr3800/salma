@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar">
 <head>
     <meta charset="UTF-8" />
-    <title>Mic Audio Classification with Recorder.js</title>
+    <title>تسجيل الصوت باستخدام Recorder.js</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -31,10 +31,10 @@
     </style>
 </head>
 <body>
-    <h1>🎤 Mic Audio Classification with Recorder.js</h1>
+    <h1>🎤 تسجيل الصوت باستخدام Recorder.js</h1>
 
-    <button id="startBtn">Start Recording</button>
-    <button id="stopBtn" disabled>Stop Recording</button>
+    <button id="startBtn">ابدأ التسجيل</button>
+    <button id="stopBtn" disabled>أوقف التسجيل</button>
 
     <div>
         <audio id="audioPlayback" controls></audio>
@@ -59,12 +59,10 @@
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     recorder = new Recorder(audioContext, {
-                        // optional, default is audio/webm; change to wav mimeType
-                        // mimeType: 'audio/wav' // Recorder.js will generate wav anyway
                         source: audioContext.createMediaStreamSource(stream)
                     });
                 } catch (err) {
-                    alert("Could not get microphone permission: " + err);
+                    alert("لم نتمكن من الحصول على إذن الميكروفون: " + err);
                     return;
                 }
             }
@@ -76,15 +74,15 @@
         };
 
         stopBtn.onclick = async () => {
-            const { blob, buffer } = await recorder.stop();
+            const { blob } = await recorder.stop();
             startBtn.disabled = false;
             stopBtn.disabled = true;
 
-            // Set playback source
+            // تعيين مصدر الصوت للتشغيل
             const audioUrl = URL.createObjectURL(blob);
             audioPlayback.src = audioUrl;
 
-            // Prepare formData to send wav file
+            // إعداد البيانات لإرسالها
             const formData = new FormData();
             formData.append("file", blob, "recording.wav");
 
@@ -97,18 +95,18 @@
                 const data = await res.json();
 
                 if (data.error) {
-                    resultDiv.innerText = `Error: ${data.error}`;
+                    resultDiv.innerText = `خطأ: ${data.error}`;
                     return;
                 }
 
-                const label = data.result?.label ?? "Unknown";
+                const label = data.result?.label ?? "غير معروف";
                 const confidence = data.result?.confidence !== undefined
                     ? (data.result.confidence * 100).toFixed(2) + "%"
                     : "N/A";
 
-                resultDiv.innerText = `Prediction: ${label}, Confidence: ${confidence}`;
+                resultDiv.innerText = `التصنيف: ${label}, الثقة: ${confidence}`;
             } catch (err) {
-                resultDiv.innerText = `Error: ${err.message}`;
+                resultDiv.innerText = `خطأ: ${err.message}`;
             }
         };
     </script>
