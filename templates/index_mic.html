@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Record WAV 16kHz & Send</title>
+<style>
+  body { font-family: Arial; padding: 20px; text-align: center; }
+  button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+  #result { margin-top: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>🎤 Record WAV 16kHz (Mono) & Send</h1>
+
+<button id="startBtn">Start Recording</button>
+<button id="stopBtn" disabled>Stop Recording</button>
+
+<br />
+<audio id="audioPlayback" controls></audio>
+
+<div id="result"></div>
+
+<script>
+  let audioContext;
+  let mediaStream;
+  let sourceNode;
+  let processorNode;
+  let audioData = [];
+
+  const SAMPLE_RATE = 16000;
+
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const audioPlayback = document.getElementById('audioPlayback');
+  const resultDiv = document.getElementById('result');
+
+  startBtn.onclick = async () => {
+    audioData = [];
+    resultDiv.innerText = '';
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    sourceNode = audioContext.createMediaStreamSource(mediaStream);
+
+    // ScriptProcessorNode deprecated but still supported widely
+    const bufferSize = 4096;
+    processorNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+    sourceNode.connect(processorNode);
+    processorNode.connect(audioContext.destination);
+
+    processorNode.onaudioprocess = (e) => {
+      const inputBuffer = e.inputBuffer.getChannelData(0);
+      // نسخ الداتا عشان ما تتغيرش
+      audioData.push(new Float32Array(inputBuffer));
+    };
+  };
+
+  stopBtn.onclick = async () => {
+    stopBtn.disabled = true;
+    startBtn.disabled = false;
+
+    // توقف التسجيل
+    processorNode.disconnect();
+    sourceNode.disconnect();
+    mediaStream.getTracks().forEach(t => t.stop());
+    audioContext.close();
+
+    // دمج البيانات كلها في مصفوفة واحدة
+    let rawBuffer = flattenArray(audioData);
+
+    // إعادة تحجيم من sampleRate الأصلي (غالبا 44100) إلى 16000
+    const inputSampleRate = audioContext.sampleRate;
+    const downsampledBuffer = downsampleBuffer(rawBuffer, inputSampleRate, SAMPLE_RATE);
+
+    // إنشاء WAV Blob من البيانات المعاد تحجيمها
+    const wavBlob = encodeWAV(downsampledBuffer, SAMPLE_RATE);
+
+    // عرض الصوت المسجل
+    const audioUrl = URL.createObjectURL(wavBlob);
+    audioPlayback.src = audioUrl;
+
+    // إرسال الملف إلى السيرفر
+    const formData = new FormData();
+    formData.append('file', wavBlob, 'recording.wav');
+
+    try {
+      const res = await fetch('https://salma-production.up.railway.app/predict', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        resultDiv.innerText = `Error: ${data.error}`;
+      } else {
+        const label = data.result?.label ?? 'Unknown';
+        const confidence = data.result?.confidence !== undefined
+          ? (data.result.confidence * 100).toFixed(2) + '%'
+          : 'N/A';
+
+        resultDiv.innerText = `Prediction: ${label}, Confidence: ${confidence}`;
+      }
+    } catch (err) {
+      resultDiv.innerText = `Fetch error: ${err.message}`;
+    }
+  };
+
+  // دالة لدمج مصفوفات Float32Array في واحدة كبيرة
+  function flattenArray(channelBuffers) {
+    let length = 0;
+    channelBuffers.forEach(buf => length += buf.length);
+    let result = new Float32Array(length);
+    let offset = 0;
+    channelBuffers.forEach(buf => {
+      result.set(buf, offset);
+      offset += buf.length;
+    });
+    return result;
+  }
+
+  // دالة لتحويل العينة (Resample)
+  function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
+    if (outputSampleRate === inputSampleRate) {
+      return buffer;
+    }
+    if (outputSampleRate > inputSampleRate) {
+      throw new Error("Output sample rate should be less than input sample rate");
+    }
+    const sampleRateRatio = inputSampleRate / outputSampleRate;
+    const newLength = Math.round(buffer.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    while (offsetResult < newLength) {
+      const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+      let accum = 0, count = 0;
+      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+        accum += buffer[i];
+        count++;
+      }
+      result[offsetResult] = accum / count;
+      offsetResult++;
+      offsetBuffer = nextOffsetBuffer;
+    }
+    return result;
+  }
+
+  // دالة لإنشاء WAV من Float32Array (PCM 16-bit)
+  function encodeWAV(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    /* RIFF identifier */
+    writeString(view, 0, 'RIFF');
+    /* file length */
+    view.setUint32(4, 36 + samples.length * 2, true);
+    /* RIFF type */
+    writeString(view, 8, 'WAVE');
+    /* format chunk identifier */
+    writeString(view, 12, 'fmt ');
+    /* format chunk length */
+    view.setUint32(16, 16, true);
+    /* sample format (raw) */
+    view.setUint16(20, 1, true);
+    /* channel count */
+    view.setUint16(22, 1, true);  // مونو
+    /* sample rate */
+    view.setUint32(24, sampleRate, true);
+    /* byte rate (sample rate * block align) */
+    view.setUint32(28, sampleRate * 2, true);
+    /* block align (channel count * bytes per sample) */
+    view.setUint16(32, 2, true);
+    /* bits per sample */
+    view.setUint16(34, 16, true);
+    /* data chunk identifier */
+    writeString(view, 36, 'data');
+    /* data chunk length */
+    view.setUint32(40, samples.length * 2, true);
+
+    // كتابة بيانات العينة (16-bit PCM)
+    floatTo16BitPCM(view, 44, samples);
+
+    return new Blob([view], { type: 'audio/wav' });
+  }
+
+  function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
+  function floatTo16BitPCM(output, offset, input) {
+    for (let i = 0; i < input.length; i++, offset += 2) {
+      let s = Math.max(-1, Math.min(1, input[i]));
+      s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      output.setInt16(offset, s, true);
+    }
+  }
+</script>
+
+</body>
+</html>
