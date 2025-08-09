@@ -74,6 +74,9 @@
 
           // أرسل الملف إلى الباك إند
           const formData = new FormData();
+            
+            console.log("Blob size (bytes):", blob.size);
+            console.log(formData)
           formData.append('file', blob, 'recording.wav');
 
           try {
