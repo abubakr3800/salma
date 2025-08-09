@@ -47,13 +47,51 @@
     const resultDiv = document.getElementById("result");
     const statusImage = document.getElementById("status-image");
 
-      try {
-        const response = await fetch("http://127.0.0.1:5000/predict", {
-          method: "POST",
-          body: formData,
-        });
+    function showMessage(message, type) {
+      resultDiv.className = "alert mt-4";
+      resultDiv.classList.add(`alert-${type}`);
+      resultDiv.textContent = message;
+      resultDiv.classList.remove("d-none");
+    }
 
-        const data = await response.json();
+    // Start recording
+    startBtn.addEventListener("click", async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.start();
+
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        resultDiv.classList.add("d-none");
+      } catch (err) {
+        showMessage("Microphone access denied or unavailable.", "danger");
+      }
+    });
+
+    // Stop and classify
+    stopBtn.addEventListener("click", () => {
+      mediaRecorder.stop();
+      stopBtn.disabled = true;
+      startBtn.disabled = false;
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append("file", audioBlob, "recording.wav");
+
+        try {
+          const response = await fetch("https://salma-production.up.railway.app/predict", {
+            method: "POST",
+            body: formData
+          });
+
+          console.log(audioBlob);
+          console.log(formData);
+          
+          const data = await response.json();
 
           console.log(data);
 
