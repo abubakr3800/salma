@@ -1,111 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Mic Audio Prediction</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            text-align: center;
-            padding: 40px;
-        }
-        button {
-            padding: 12px 20px;
-            margin: 10px;
-            border: none;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        #startBtn { background: #4CAF50; }
-        #stopBtn { background: #f44336; }
-        #result {
-            font-size: 18px;
-            margin-top: 20px;
-        }
-        audio {
-            margin-top: 15px;
-            width: 300px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Audio Classifier</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap 5 CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    #image-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    #image-container img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+  </style>
 </head>
+
 <body>
-    <h1>🎤 Mic Audio Classification</h1>
+  <div class="container py-5">
+    <h2 class="mb-4 text-center">Upload Audio File</h2>
 
-    <button id="startBtn">Start Recording</button>
-    <button id="stopBtn" disabled>Stop Recording</button>
+    <!-- <p class="text-center mb-4">Supported formats: .wav, .mp3, .wmv</p> -->
+    
+    <div class="row">
+      <div class="col-6">
+        <form id="uploadForm" class="mb-4" enctype="multipart/form-data">
+          <div class="mb-3">
+            <input type="file" class="form-control" name="file" id="fileInput" accept=".wav,.mp3,.wmv">
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Classify</button>
+        </form>
 
-    <div>
-        <audio id="audioPlayback" controls></audio>
+        <div id="result" class="alert alert-info d-none text-center"></div>
+
+        <div id="controls" class="text-center row">
+
+          <div class="col">
+            <button class=" btn btn-transparent" onclick="normalLight()"><img class="icon img-fluid" src="{{ url_for('static', filename='img/car.png') }}" alt="Normal Light"></button>
+            <audio id="car" src="{{ url_for('static', filename='music/car.wav') }}"></audio>
+          </div>
+          <div class="col">
+            <button class=" btn btn-transparent" onclick="RainandThunder()"><img class="icon img-fluid" src="{{ url_for('static', filename='img/rain.png') }}" alt="Rain and Thunder"></button>
+            <audio id="rain" src="{{ url_for('static', filename='music/rain.mp3') }}"></audio>
+          </div>
+          <div class="col">
+            <button class=" btn btn-transparent" onclick="dim()"><img class="icon img-fluid" src="{{ url_for('static', filename='img/noise.png') }}" alt="Dim"></button>
+            <audio id="noise" src="{{ url_for('static', filename='music/noise.mp3') }}"></audio>
+          </div>
+        </div>
+      </div>
+  
+      <div class="col-6">
+        <div id="image-container">
+          <!-- Fixed image for visual feedback -->
+          <img id="status-image" src="{{ url_for('static', filename='img/SC-Street-Simulator0001.webp') }}" alt="Preview">
+        </div>
+      </div>
     </div>
 
-    <div id="result"></div>
+  </div>
 
-    <script>
-        let mediaRecorder;
-        let audioChunks = [];
+  <script>
+    document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
 
-        const startBtn = document.getElementById("startBtn");
-        const stopBtn = document.getElementById("stopBtn");
-        const audioPlayback = document.getElementById("audioPlayback");
-        const resultDiv = document.getElementById("result");
+      const fileInput = document.getElementById("fileInput");
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
 
-        startBtn.addEventListener("click", async () => {
-            audioChunks = [];
-            resultDiv.innerText = "";
+      const resultDiv = document.getElementById("result");
+      const statusImage = document.getElementById("status-image");
 
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-
-            mediaRecorder.ondataavailable = e => {
-                if (e.data.size > 0) {
-                    audioChunks.push(e.data);
-                }
-            };
-
-            mediaRecorder.onstop = async () => {
-                const blob = new Blob(audioChunks, { type: "audio/wav" });
-                const audioUrl = URL.createObjectURL(blob);
-                audioPlayback.src = audioUrl;
-
-                // Send to backend
-                const formData = new FormData();
-                formData.append("file", blob, "recording.wav");
-
-                try {
-                    const res = await fetch("https://salma-production.up.railway.app/predict", {
-                        method: "POST",
-                        body: formData
-                    });
-                    const data = await res.json();
-
-                    if (data.error) {
-                        resultDiv.innerText = `Error: ${data.error}`;
-                        return;
-                    }
-
-                    const label = data.result?.label ?? "Unknown";
-                    const confidence = data.result?.confidence !== undefined
-                        ? (data.result.confidence * 100).toFixed(2) + "%"
-                        : "N/A";
-
-                    resultDiv.innerText = `Prediction: ${label}, Confidence: ${confidence}`;
-                } catch (err) {
-                    resultDiv.innerText = `Error: ${err.message}`;
-                }
-            };
-
-            mediaRecorder.start();
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
+      try {
+        const response = await fetch("http://127.0.0.1:5000/predict", {
+          method: "POST",
+          body: formData,
         });
 
-        stopBtn.addEventListener("click", () => {
-            mediaRecorder.stop();
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-        });
-    </script>
+        const data = await response.json();
+
+        console.log(data);
+
+        if (response.ok) {
+          const label = data.result.label;
+          const confidence = data.result.confidence;
+
+          resultDiv.classList.remove("d-none", "alert-danger");
+          resultDiv.classList.add("alert-info");
+          resultDiv.innerText = `Prediction: ${label}, with a confidence of ${confidence.toFixed(2)}`;
+
+          console.log(label == "Rain and thunder");
+          
+
+          // Apply warm filter if "Rain and Thunder"
+          if (label == "Rain and thunder") {
+            // statusImage.classList.remove("normal-filter");
+            // statusImage.classList.add("warm-filter");
+            statusImage.src = "{{ url_for('static', filename='img/SC-Street-Simulator0003.webp') }}"; // Reset to original image
+          } else {
+            // statusImage.classList.remove("warm-filter");
+            // statusImage.classList.add("normal-filter");
+            statusImage.src = "{{ url_for('static', filename='img/SC-Street-Simulator0002.webp') }}"; // Reset to original image
+          }
+        } else {
+          resultDiv.classList.remove("d-none", "alert-info");
+          resultDiv.classList.add("alert-danger");
+          resultDiv.innerText = `Server error: ${data.error}`;
+        }
+      } catch (err) {
+        resultDiv.classList.remove("d-none", "alert-info");
+        resultDiv.classList.add("alert-danger");
+        resultDiv.innerText = `Network error: ${err}`;
+      }
+    });
+
+
+    const car = document.getElementById("car");
+    const rain = document.getElementById("rain");
+    const noise = document.getElementById("noise");
+
+    function normalLight(){
+      const statusImage = document.getElementById("status-image");
+      statusImage.src = "{{ url_for('static', filename='img/SC-Street-Simulator0002.webp') }}"; // Reset to original image
+      car.play();
+      rain.pause();
+      noise.pause();
+    }
+
+    function dim(){
+      const statusImage = document.getElementById("status-image");
+      statusImage.src = "{{ url_for('static', filename='img/SC-Street-Simulator0001.webp') }}"; // Reset to original image
+      noise.play();
+      car.pause();
+      rain.pause();
+
+    }
+
+    function RainandThunder(){
+      const statusImage = document.getElementById("status-image");
+      statusImage.src = "{{ url_for('static', filename='img/SC-Street-Simulator0003.webp') }}"; // Reset to original image
+      rain.play();
+      noise.pause();
+      car.pause();
+    }
+
+  </script>
 </body>
 </html>
