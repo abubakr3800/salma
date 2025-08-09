@@ -202,5 +202,3 @@ For questions, issues, or contributions, please:
 - Check the documentation wiki
 
 ---
-
-**Made with ❤️ by the Audio Environment Classifier Team**
