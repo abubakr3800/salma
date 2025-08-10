@@ -40,15 +40,10 @@
           <a class="nav-link active" aria-current="page" href="#">Home</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="index_mix.html">Upload or Record Audio to Classify</a>
+          <a class="nav-link" href="{{ url_for('templates', filename='index_mix.html') }}">Upload or Record Audio to Classify</a>
         </li>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="index_mic.html" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Record Audio to Classify
-          </a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="index_mic.html">Record Audio to Classify</a></li>
-          </ul>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('templates', filename='index_mic.html') }}">Record Audio to Classify</a>
         </li>
       </ul>
     </div>
