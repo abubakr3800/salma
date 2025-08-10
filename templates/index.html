@@ -124,7 +124,7 @@
 
   let audioContext, mediaStream, sourceNode, processorNode;
   let audioData = [];
-  const SAMPLE_RATE = 16000;
+  const SAMPLE_RATE = 48000;
 
   const startBtn = document.getElementById("startBtn");
   const stopBtn = document.getElementById("stopBtn");
@@ -190,6 +190,7 @@
 
       if (res.ok && data.result) {
         handlePredictionResult(data.result);
+          
       } else {
         showError(data.error || "Server error");
       }
