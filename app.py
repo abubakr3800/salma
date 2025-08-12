@@ -2,8 +2,11 @@ from flask import Flask, request, jsonify, render_template
 # from classify_old import predict_audio_class
 from classify import predict_audio_class
 import os
+from flask_cors import CORS
+
 
 app = Flask(__name__)
+CORS(app)
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
